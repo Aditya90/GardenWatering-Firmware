@@ -10,6 +10,8 @@
 #include "webIntf.h"
 #include "hardwareConfig.h"
 #include "motorClass.h"
+#include "PietteTech_DHT.h"
+#include "DhtDriver_Intf.h"
 
 // -------------------------
 // --- PRIVATE DEFINES ---
@@ -18,6 +20,7 @@
 // -------------------------
 // --- PRIVATE TYPES ---
 // -------------------------
+
 /**
  * @brief RX message status list to pass locally in this file
  */
@@ -29,6 +32,15 @@ typedef enum
 }RX_MSG_STATUS;
 
 // -------------------------
+// --- PRIVATE FUNCTION DECLARATIONS ---
+// -------------------------
+static int main_motorSpeedChange(String command);
+static void main_rxMsgUiCallback(RX_MSG_STATUS rxMsgStatus);
+static void main_initMotorOutputs(MotorClass* motor, int pinNumber, MOTOR_TYPE motorType);
+static void main_dhtLoop(void);
+static void main_dhtWrapper(void);
+
+// -------------------------
 // --- PRIVATE VARIABLES ---
 // -------------------------
 
@@ -37,12 +49,24 @@ typedef enum
  */
 MotorClass plantMotor1;
 
+/**
+ * @brief Instantiate an instance of the DHT
+ */
+PietteTech_DHT DHT(DHTPIN, DHTTYPE, main_dhtWrapper);
+
 // -------------------------
-// --- PRIVATE FUNCTION DECLARATIONS ---
+// --- PUBLIC VARIABLES ---
 // -------------------------
-static int main_motorSpeedChange(String command);
-static void main_rxMsgUiCallback(RX_MSG_STATUS rxMsgStatus);
-static void main_initMotorOutputs(MotorClass* motor, int pinNumber, MOTOR_TYPE motorType);
+
+/**
+ * @brief Particle cloud variable for temperature value in celsius
+ */
+int ParticleCloudVar_TemperatureValueCelsius;
+
+/**
+ * @brief Particle cloud variable for humidity in percentage
+ */
+int ParticleCloudVar_HumidityPercentage;
 
 // -------------------------
 // --- PUBLIC FUNCTION DEFINITIONS ---
@@ -53,29 +77,131 @@ static void main_initMotorOutputs(MotorClass* motor, int pinNumber, MOTOR_TYPE m
  */
 void setup()
 {
-   // Code working indication
-   pinMode(RX_STATUS_LED_PIN, OUTPUT);
-   digitalWrite(RX_STATUS_LED_PIN, HIGH);
+   // Initialize the cloud variables
+   ParticleCloudVar_TemperatureValueCelsius = 0;
+   ParticleCloudVar_HumidityPercentage = 0;
 
-   // Init Motor Output Pin
-   main_initMotorOutputs(&plantMotor1, MOTOR_1_PIN, MOTOR_1_TYPE);
+   // We are going to declare a Spark.variable() here so that we can access the value of the photoresistor from the cloud.
+   Particle.variable("TemperatureValueCelsius", &ParticleCloudVar_TemperatureValueCelsius, INT);
+   Particle.variable("HumidityPercentage", &ParticleCloudVar_HumidityPercentage, INT);
 
-   // Init the web app and point the cloud function with the local motor
-   // control function
-   Spark.function(REST_API_MOTOR_CONTROL_FN, main_motorSpeedChange);
+   // Begin USB serial communication
+   Serial.begin(9600);
+
 }
 
-/**
- * @brief loop function for the application
- */
 void loop()
 {
-
+   main_dhtLoop();
 }
 
 // -------------------------
 // --- PRIVATE FUNCTION DEFINITIONS ---
 // -------------------------
+
+/**
+ * @brief Wrapper required for instantiating the DHT object
+ */
+static void main_dhtWrapper(void)
+{
+    DHT.isrCallback();
+}
+/**
+ * @brief The main dht loop
+ */
+static void main_dhtLoop(void)
+{
+   static bool DHT_HasStarted = FALSE; // flag to indicate we started acquisition
+   static int DHT_SampleCounter = 0;  // counter
+   static unsigned int DHT_NextSampleTime = 0;  // Start the first sample immediately
+
+  // Check if we need to start the next sample
+  if (millis() > DHT_NextSampleTime)
+  {
+      if (!DHT_HasStarted)
+      {
+          Serial.print("\n");
+          Serial.print(DHT_SampleCounter);
+          Serial.print(": Retrieving information from sensor: ");
+          DHT.acquire();
+          DHT_HasStarted = true;
+      }
+
+       if (!DHT.acquiring())
+       {
+          // get DHT status
+          int result = DHT.getStatus();
+
+          Serial.print("Read sensor: ");
+
+          switch (result)
+          {
+            case DHTLIB_OK:
+               Serial.println("OK");
+            break;
+
+            case DHTLIB_ERROR_CHECKSUM:
+               Serial.println("Error\n\r\tChecksum error");
+            break;
+
+            case DHTLIB_ERROR_ISR_TIMEOUT:
+               Serial.println("Error\n\r\tISR time out error");
+            break;
+
+            case DHTLIB_ERROR_RESPONSE_TIMEOUT:
+               Serial.println("Error\n\r\tResponse time out error");
+            break;
+
+            case DHTLIB_ERROR_DATA_TIMEOUT:
+               Serial.println("Error\n\r\tData time out error");
+            break;
+
+            case DHTLIB_ERROR_ACQUIRING:
+               Serial.println("Error\n\r\tAcquiring");
+            break;
+
+            case DHTLIB_ERROR_DELTA:
+               Serial.println("Error\n\r\tDelta time to small");
+            break;
+
+            case DHTLIB_ERROR_NOTSTARTED:
+               Serial.println("Error\n\r\tNot started");
+            break;
+
+            default:
+               Serial.println("Unknown error");
+            break;
+          }
+
+          ParticleCloudVar_HumidityPercentage = DHT.getHumidity();
+          Serial.print("Humidity (%): ");
+          Serial.println(ParticleCloudVar_HumidityPercentage, 2);
+
+          ParticleCloudVar_TemperatureValueCelsius = DHT.getCelsius();
+          char temp[20];
+          sprintf(temp, "%d", ParticleCloudVar_TemperatureValueCelsius);
+          Serial.print("Temperature (oC): ");
+          Serial.println(ParticleCloudVar_TemperatureValueCelsius, 2);
+          Particle.publish("Temperature_Celsius", temp);
+
+          Serial.print("Temperature (oF): ");
+          Serial.println(DHT.getFahrenheit(), 2);
+
+          Serial.print("Temperature (K): ");
+          Serial.println(DHT.getKelvin(), 2);
+
+          Serial.print("Dew Point (oC): ");
+          Serial.println(DHT.getDewPoint());
+
+          Serial.print("Dew Point Slow (oC): ");
+          Serial.println(DHT.getDewPointSlow());
+
+          DHT_SampleCounter++;  // increment counter
+          DHT_HasStarted = false;  // reset the sample flag so we can take another
+          DHT_NextSampleTime = millis() + DHT_SAMPLE_INTERVAL;  // set the time for next sample
+      }
+   }
+}
 
 /**
  * @brief Init the motor outputs
