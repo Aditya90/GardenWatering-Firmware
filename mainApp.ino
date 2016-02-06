@@ -77,17 +77,27 @@ int ParticleCloudVar_HumidityPercentage;
  */
 void setup()
 {
+   // Code working indication
+   pinMode(RX_STATUS_LED_PIN, OUTPUT);
+   digitalWrite(RX_STATUS_LED_PIN, HIGH);
+
+   // Init Motor Output Pin
+   main_initMotorOutputs(&plantMotor1, MOTOR_1_PIN, MOTOR_1_TYPE);
+
+   // Init the web app and point the cloud function with the local motor
+   // control function
+   Particle.function(REST_API_MOTOR_CONTROL_FN, main_motorSpeedChange);
+
    // Initialize the cloud variables
    ParticleCloudVar_TemperatureValueCelsius = 0;
    ParticleCloudVar_HumidityPercentage = 0;
 
-   // We are going to declare a Spark.variable() here so that we can access the value of the photoresistor from the cloud.
+   // Register the temperatue and humidity as particle cloud variables
    Particle.variable("TemperatureValueCelsius", &ParticleCloudVar_TemperatureValueCelsius, INT);
    Particle.variable("HumidityPercentage", &ParticleCloudVar_HumidityPercentage, INT);
 
    // Begin USB serial communication
    Serial.begin(9600);
-
 }
 
 void loop()
@@ -106,6 +116,7 @@ static void main_dhtWrapper(void)
 {
     DHT.isrCallback();
 }
+
 /**
  * @brief The main dht loop
  */
@@ -132,69 +143,32 @@ static void main_dhtLoop(void)
           // get DHT status
           int result = DHT.getStatus();
 
-          Serial.print("Read sensor: ");
-
           switch (result)
           {
             case DHTLIB_OK:
-               Serial.println("OK");
-            break;
-
-            case DHTLIB_ERROR_CHECKSUM:
-               Serial.println("Error\n\r\tChecksum error");
-            break;
-
-            case DHTLIB_ERROR_ISR_TIMEOUT:
-               Serial.println("Error\n\r\tISR time out error");
-            break;
-
-            case DHTLIB_ERROR_RESPONSE_TIMEOUT:
-               Serial.println("Error\n\r\tResponse time out error");
-            break;
-
-            case DHTLIB_ERROR_DATA_TIMEOUT:
-               Serial.println("Error\n\r\tData time out error");
-            break;
-
-            case DHTLIB_ERROR_ACQUIRING:
-               Serial.println("Error\n\r\tAcquiring");
-            break;
-
-            case DHTLIB_ERROR_DELTA:
-               Serial.println("Error\n\r\tDelta time to small");
-            break;
-
-            case DHTLIB_ERROR_NOTSTARTED:
-               Serial.println("Error\n\r\tNot started");
-            break;
-
+            {
+               // Don't print anything if the reading was valid
+               break;
+            }
             default:
-               Serial.println("Unknown error");
-            break;
+            {
+               Serial.println("Unknown error : ");
+               Serial.print(result);
+               Serial.print("\n");
+               break;
+            }
           }
 
           ParticleCloudVar_HumidityPercentage = DHT.getHumidity();
-          Serial.print("Humidity (%): ");
-          Serial.println(ParticleCloudVar_HumidityPercentage, 2);
+          char humidityString[20];
+          sprintf(humidityString, "%d", ParticleCloudVar_HumidityPercentage);
 
-          ParticleCloudVar_TemperatureValueCelsius = DHT.getCelsius();
-          char temp[20];
-          sprintf(temp, "%d", ParticleCloudVar_TemperatureValueCelsius);
-          Serial.print("Temperature (oC): ");
-          Serial.println(ParticleCloudVar_TemperatureValueCelsius, 2);
-          Particle.publish("Temperature_Celsius", temp);
+          ParticleCloudVar_TemperatureValueCelsius = DHT.getFahrenheit();
+          char temperatueString[20];
+          sprintf(temperatueString, "%d", ParticleCloudVar_TemperatureValueCelsius);
 
-          Serial.print("Temperature (oF): ");
-          Serial.println(DHT.getFahrenheit(), 2);
-
-          Serial.print("Temperature (K): ");
-          Serial.println(DHT.getKelvin(), 2);
-
-          Serial.print("Dew Point (oC): ");
-          Serial.println(DHT.getDewPoint());
-
-          Serial.print("Dew Point Slow (oC): ");
-          Serial.println(DHT.getDewPointSlow());
+          Particle.publish("Humidity_Percentage", humidityString);
+          Particle.publish("Temperature_Celsius", temperatueString);
 
           DHT_SampleCounter++;  // increment counter
           DHT_HasStarted = false;  // reset the sample flag so we can take another
