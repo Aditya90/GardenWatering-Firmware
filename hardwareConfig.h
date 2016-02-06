@@ -20,4 +20,9 @@
  */
 #define MOTOR_1_TYPE  (MOTOR_SWITCH)
 
+ /**
+  * @brief Digital pin for communications with the DHT22
+  */
+ #define DHT_PIN   D2
+
 #endif

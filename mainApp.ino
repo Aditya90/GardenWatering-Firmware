@@ -52,7 +52,7 @@ MotorClass plantMotor1;
 /**
  * @brief Instantiate an instance of the DHT
  */
-PietteTech_DHT DHT(DHTPIN, DHTTYPE, main_dhtWrapper);
+PietteTech_DHT DHT(DHT_PIN, DHTTYPE, main_dhtWrapper);
 
 // -------------------------
 // --- PUBLIC VARIABLES ---

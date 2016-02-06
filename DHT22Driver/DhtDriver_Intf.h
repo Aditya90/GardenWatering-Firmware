@@ -11,11 +11,6 @@
  #define DHTTYPE  DHT22
 
  /**
-  * @brief Digital pin for communications
-  */
- #define DHTPIN   D2
-
- /**
   * @brief Sample every two seconds
   */
  #define DHT_SAMPLE_INTERVAL   2000
