@@ -10,6 +10,8 @@
 #include "webIntf.h"
 #include "hardwareConfig.h"
 #include "motorClass.h"
+#include "PietteTech_DHT.h"
+#include "DhtDriver_Intf.h"
 
 // -------------------------
 // --- PRIVATE DEFINES ---
@@ -18,6 +20,7 @@
 // -------------------------
 // --- PRIVATE TYPES ---
 // -------------------------
+
 /**
  * @brief RX message status list to pass locally in this file
  */
@@ -29,6 +32,15 @@ typedef enum
 }RX_MSG_STATUS;
 
 // -------------------------
+// --- PRIVATE FUNCTION DECLARATIONS ---
+// -------------------------
+static int main_motorSpeedChange(String command);
+static void main_rxMsgUiCallback(RX_MSG_STATUS rxMsgStatus);
+static void main_initMotorOutputs(MotorClass* motor, int pinNumber, MOTOR_TYPE motorType);
+static void main_dhtLoop(void);
+static void main_dhtWrapper(void);
+
+// -------------------------
 // --- PRIVATE VARIABLES ---
 // -------------------------
 
@@ -37,12 +49,24 @@ typedef enum
  */
 MotorClass plantMotor1;
 
+/**
+ * @brief Instantiate an instance of the DHT
+ */
+PietteTech_DHT DHT(DHT_PIN, DHTTYPE, main_dhtWrapper);
+
 // -------------------------
-// --- PRIVATE FUNCTION DECLARATIONS ---
+// --- PUBLIC VARIABLES ---
 // -------------------------
-static int main_motorSpeedChange(String command);
-static void main_rxMsgUiCallback(RX_MSG_STATUS rxMsgStatus);
-static void main_initMotorOutputs(MotorClass* motor, int pinNumber, MOTOR_TYPE motorType);
+
+/**
+ * @brief Particle cloud variable for temperature value in celsius
+ */
+int ParticleCloudVar_TemperatureValueCelsius;
+
+/**
+ * @brief Particle cloud variable for humidity in percentage
+ */
+int ParticleCloudVar_HumidityPercentage;
 
 // -------------------------
 // --- PUBLIC FUNCTION DEFINITIONS ---
@@ -62,20 +86,93 @@ void setup()
 
    // Init the web app and point the cloud function with the local motor
    // control function
-   Spark.function(REST_API_MOTOR_CONTROL_FN, main_motorSpeedChange);
+   Particle.function(REST_API_MOTOR_CONTROL_FN, main_motorSpeedChange);
+
+   // Initialize the cloud variables
+   ParticleCloudVar_TemperatureValueCelsius = 0;
+   ParticleCloudVar_HumidityPercentage = 0;
+
+   // Register the temperatue and humidity as particle cloud variables
+   Particle.variable("TemperatureValueCelsius", &ParticleCloudVar_TemperatureValueCelsius, INT);
+   Particle.variable("HumidityPercentage", &ParticleCloudVar_HumidityPercentage, INT);
+
+   // Begin USB serial communication
+   Serial.begin(9600);
 }
 
-/**
- * @brief loop function for the application
- */
 void loop()
 {
-
+   main_dhtLoop();
 }
 
 // -------------------------
 // --- PRIVATE FUNCTION DEFINITIONS ---
 // -------------------------
+
+/**
+ * @brief Wrapper required for instantiating the DHT object
+ */
+static void main_dhtWrapper(void)
+{
+    DHT.isrCallback();
+}
+
+/**
+ * @brief The main dht loop
+ */
+static void main_dhtLoop(void)
+{
+   static bool DHT_HasStarted = FALSE; // flag to indicate we started acquisition
+   static unsigned long DHT_NextSampleTime = 0;  // Start the first sample immediately
+
+  // Check if we need to start the next sample
+  if (millis() > DHT_NextSampleTime)
+  {
+      if (!DHT_HasStarted)
+      {
+          DHT.acquire();
+          DHT_HasStarted = true;
+      }
+
+       if (!DHT.acquiring())
+       {
+          // get DHT status
+          int result = DHT.getStatus();
+
+          switch (result)
+          {
+            case DHTLIB_OK:
+            {
+               // Don't print anything if the reading was valid
+               break;
+            }
+            default:
+            {
+               Serial.println("Unknown error : ");
+               Serial.print(result);
+               Serial.print("\n");
+               break;
+            }
+          }
+
+          ParticleCloudVar_HumidityPercentage = DHT.getHumidity();
+          char humidityString[20];
+          sprintf(humidityString, "%d", ParticleCloudVar_HumidityPercentage);
+
+          ParticleCloudVar_TemperatureValueCelsius = DHT.getFahrenheit();
+          char temperatueString[20];
+          sprintf(temperatueString, "%d", ParticleCloudVar_TemperatureValueCelsius);
+
+          Particle.publish("Humidity_Percentage", humidityString);
+          Particle.publish("Temperature_Celsius", temperatueString);
+
+          // reset the sample flag so we can take another
+          DHT_HasStarted = false;
+          // set the time for next sample - This will eventually wrap around
+          DHT_NextSampleTime = millis() + DHT_SAMPLE_INTERVAL_MS;
+      }
+   }
+}
 
 /**
  * @brief Init the motor outputs

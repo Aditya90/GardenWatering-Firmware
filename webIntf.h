@@ -40,4 +40,15 @@ typedef enum
    MAX_NUM_RX_MSG_RETVALS
 }RX_MSG_RETVALS;
 
+/**
+ * @brief Particle cloud variable for temperature value in celsius
+ */
+extern int ParticleCloudVar_TemperatureValueCelsius;
+
+/**
+ * @brief Particle cloud variable for humidity in percentage
+ */
+extern int ParticleCloudVar_HumidityPercentage;
+
+
 #endif
