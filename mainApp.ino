@@ -123,17 +123,13 @@ static void main_dhtWrapper(void)
 static void main_dhtLoop(void)
 {
    static bool DHT_HasStarted = FALSE; // flag to indicate we started acquisition
-   static int DHT_SampleCounter = 0;  // counter
-   static unsigned int DHT_NextSampleTime = 0;  // Start the first sample immediately
+   static unsigned long DHT_NextSampleTime = 0;  // Start the first sample immediately
 
   // Check if we need to start the next sample
   if (millis() > DHT_NextSampleTime)
   {
       if (!DHT_HasStarted)
       {
-          Serial.print("\n");
-          Serial.print(DHT_SampleCounter);
-          Serial.print(": Retrieving information from sensor: ");
           DHT.acquire();
           DHT_HasStarted = true;
       }
@@ -170,9 +166,10 @@ static void main_dhtLoop(void)
           Particle.publish("Humidity_Percentage", humidityString);
           Particle.publish("Temperature_Celsius", temperatueString);
 
-          DHT_SampleCounter++;  // increment counter
-          DHT_HasStarted = false;  // reset the sample flag so we can take another
-          DHT_NextSampleTime = millis() + DHT_SAMPLE_INTERVAL;  // set the time for next sample
+          // reset the sample flag so we can take another
+          DHT_HasStarted = false;
+          // set the time for next sample - This will eventually wrap around
+          DHT_NextSampleTime = millis() + DHT_SAMPLE_INTERVAL_MS;
       }
    }
 }
