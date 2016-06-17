@@ -12,6 +12,7 @@
 #include "motorClass.h"
 #include "PietteTech_DHT.h"
 #include "DhtDriver_Intf.h"
+#include "soilMoistureSensor.h"
 
 // -------------------------
 // --- PRIVATE DEFINES ---
@@ -34,6 +35,9 @@ typedef enum
 // -------------------------
 // --- PRIVATE FUNCTION DECLARATIONS ---
 // -------------------------
+
+static void main_motorsInit(void);
+static void main_sensorsInit(void);
 static int main_motorSpeedChange(String command);
 static void main_rxMsgUiCallback(RX_MSG_STATUS rxMsgStatus);
 static void main_initMotorOutputs(MotorClass* motor, int pinNumber, MOTOR_TYPE motorType);
@@ -54,6 +58,15 @@ MotorClass plantMotor1;
  */
 PietteTech_DHT DHT(DHT_PIN, DHTTYPE, main_dhtWrapper);
 
+/**
+ * @brief Instantiate a soil moisture sensor
+ */
+SOIL_MOISTURE_SENSOR *soilMoistureSensor1;
+
+/**
+ * @brief Declare an instance of the soil moisture sensor manager
+ */
+SOIL_MOISTURE_SENSOR_MANAGER *soilMoistureSensorManager;
 // -------------------------
 // --- PUBLIC VARIABLES ---
 // -------------------------
@@ -61,12 +74,17 @@ PietteTech_DHT DHT(DHT_PIN, DHTTYPE, main_dhtWrapper);
 /**
  * @brief Particle cloud variable for temperature value in celsius
  */
-int ParticleCloudVar_TemperatureValueCelsius;
+int ParticleCloudVar_TemperatureValueFahrenheit;
 
 /**
  * @brief Particle cloud variable for humidity in percentage
  */
 int ParticleCloudVar_HumidityPercentage;
+
+/**
+ * @brief Particle cloud variable for moisture in percentage
+ */
+int ParticleCloudVar_MoisturePercentage;
 
 // -------------------------
 // --- PUBLIC FUNCTION DEFINITIONS ---
@@ -81,20 +99,11 @@ void setup()
    pinMode(RX_STATUS_LED_PIN, OUTPUT);
    digitalWrite(RX_STATUS_LED_PIN, HIGH);
 
-   // Init Motor Output Pin
-   main_initMotorOutputs(&plantMotor1, MOTOR_1_PIN, MOTOR_1_TYPE);
+   // Init the motors
+   main_motorsInit();
 
-   // Init the web app and point the cloud function with the local motor
-   // control function
-   Particle.function(REST_API_MOTOR_CONTROL_FN, main_motorSpeedChange);
-
-   // Initialize the cloud variables
-   ParticleCloudVar_TemperatureValueCelsius = 0;
-   ParticleCloudVar_HumidityPercentage = 0;
-
-   // Register the temperatue and humidity as particle cloud variables
-   Particle.variable("TemperatureValueCelsius", &ParticleCloudVar_TemperatureValueCelsius, INT);
-   Particle.variable("HumidityPercentage", &ParticleCloudVar_HumidityPercentage, INT);
+   // Init the sensors
+   main_sensorsInit();
 
    // Begin USB serial communication
    Serial.begin(9600);
@@ -108,6 +117,42 @@ void loop()
 // -------------------------
 // --- PRIVATE FUNCTION DEFINITIONS ---
 // -------------------------
+
+/**
+ * @brief Initialize all the sensors in the circuit
+ */
+static void main_sensorsInit(void)
+{
+   // Initialize the cloud variables
+   ParticleCloudVar_TemperatureValueFahrenheit = 0;
+   ParticleCloudVar_HumidityPercentage = 0;
+   ParticleCloudVar_MoisturePercentage = 0;
+
+   // Register the temperature and humidity as particle cloud variables
+   Particle.variable(REST_API_TEMPERATURE_VAR, &ParticleCloudVar_TemperatureValueFahrenheit, INT);
+   Particle.variable(REST_API_HUMIDITY_VAR, &ParticleCloudVar_HumidityPercentage, INT);
+   Particle.variable(REST_API_MOISTURE_VAR, &ParticleCloudVar_MoisturePercentage, INT);
+
+   // Initialize the soil moisture sensor 1
+   soilMoistureSensor1 = new SOIL_MOISTURE_SENSOR(SOIL_MOISTURE_SENSOR_1_SIGNAL_PIN,
+      SOIL_MOISTURE_SENSOR_1_VCC_PIN);
+
+   // Initialize an instance of the soil moisture sensor manager
+   soilMoistureSensorManager = new SOIL_MOISTURE_SENSOR_MANAGER();
+}
+
+/**
+ * @brief Initialize all the motors in the circuit
+ */
+static void main_motorsInit(void)
+{
+   // Init Motor Output Pin
+   main_initMotorOutputs(&plantMotor1, MOTOR_1_PIN, MOTOR_1_TYPE);
+
+   // Init the web app and point the cloud function with the local motor
+   // control function
+   Particle.function(REST_API_MOTOR_CONTROL_FN, main_motorSpeedChange);
+}
 
 /**
  * @brief Wrapper required for instantiating the DHT object
@@ -159,12 +204,12 @@ static void main_dhtLoop(void)
           char humidityString[20];
           sprintf(humidityString, "%d", ParticleCloudVar_HumidityPercentage);
 
-          ParticleCloudVar_TemperatureValueCelsius = DHT.getFahrenheit();
-          char temperatueString[20];
-          sprintf(temperatueString, "%d", ParticleCloudVar_TemperatureValueCelsius);
+          ParticleCloudVar_TemperatureValueFahrenheit = DHT.getFahrenheit();
+          char temperatureString[20];
+          sprintf(temperatureString, "%d", ParticleCloudVar_TemperatureValueFahrenheit);
 
-          Particle.publish("Humidity_Percentage", humidityString);
-          Particle.publish("Temperature_Celsius", temperatueString);
+          Particle.publish(REST_API_HUMIDITY_VAR, humidityString);
+          Particle.publish(REST_API_TEMPERATURE_VAR, temperatureString);
 
           // reset the sample flag so we can take another
           DHT_HasStarted = false;
