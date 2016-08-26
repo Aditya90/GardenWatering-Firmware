@@ -13,6 +13,7 @@
 #include "PietteTech_DHT.h"
 #include "DhtDriver_Intf.h"
 #include "soilMoistureSensor.h"
+#include "soilMoistureSensorManager.h"
 
 // -------------------------
 // --- PRIVATE DEFINES ---
@@ -67,6 +68,7 @@ SOIL_MOISTURE_SENSOR *soilMoistureSensor1;
  * @brief Declare an instance of the soil moisture sensor manager
  */
 SOIL_MOISTURE_SENSOR_MANAGER *soilMoistureSensorManager;
+
 // -------------------------
 // --- PUBLIC VARIABLES ---
 // -------------------------

@@ -6,6 +6,8 @@
 #ifndef SOIL_MOISTURE_SENSOR_MANAGER_H_
 #define SOIL_MOISTURE_SENSOR_MANAGER_H_
 
+#include "application.h"
+
 class SOIL_MOISTURE_SENSOR_MANAGER
 {
    private:
@@ -17,7 +19,7 @@ class SOIL_MOISTURE_SENSOR_MANAGER
       SOIL_MOISTURE_SENSOR_MANAGER():_pollingPeriodMilliSec(POLLING_PERIOD_MILLISEC_DEFAULT)
       {
          _timerHandler = new Timer(_pollingPeriodMilliSec,
-            this.SoilMoistureSensorManager_TaskHandler);
+            this->SoilMoistureSensorManager_TaskHandler);
          _timerHandler.start();
       }
 
@@ -26,7 +28,7 @@ class SOIL_MOISTURE_SENSOR_MANAGER
          _timerHandler = nullptr;
       }
 
-      void SoilMoistureSensorManager_TaskHandler();
-}
+      void SoilMoistureSensorManager_TaskHandler(void);
+};
 
 #endif
