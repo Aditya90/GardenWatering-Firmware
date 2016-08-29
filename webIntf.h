@@ -11,6 +11,16 @@
 #define REST_API_MOTOR_CONTROL_FN "motorControl"
 
 /**
+ * @brief The REST varialbe for temperature in units of Fahrenheit
+ */
+#define REST_API_TEMPERATURE_VAR "Temperature_Fahrenheit"
+
+/**
+ * @brief The REST varialbe for humidity in units of percentage
+ */
+#define REST_API_HUMIDITY_VAR "Humidity_Percentage"
+
+/**
  * @brief Command to increase speed of the motor
  */
 #define CMD_SPEED_INCREASE "increase"
@@ -39,5 +49,17 @@ typedef enum
    RX_MSG_RETVAL_SUCCESS,
    MAX_NUM_RX_MSG_RETVALS
 }RX_MSG_RETVALS;
+
+/**
+ * @brief Particle cloud variable for temperature value in Fahrenheit
+ */
+extern int ParticleCloudVar_TemperatureValueFahrenheit;
+
+/**
+ * @brief Particle cloud variable for humidity in percentage
+ */
+extern int ParticleCloudVar_HumidityPercentage;
+
+
 
 #endif
